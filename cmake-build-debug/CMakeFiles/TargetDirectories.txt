@@ -1,0 +1,3 @@
+C:/Users/remza/CLionProjects/chip-8/cmake-build-debug/CMakeFiles/chip_8.dir
+C:/Users/remza/CLionProjects/chip-8/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/remza/CLionProjects/chip-8/cmake-build-debug/CMakeFiles/rebuild_cache.dir
