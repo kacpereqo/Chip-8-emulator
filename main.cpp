@@ -68,7 +68,7 @@ public:
     }
 
     void load_font() {
-        uint8_t font[16][5] =
+        const uint8_t font[16][5] =
         {
             {0xF0, 0x90, 0x90, 0x90, 0xF0}, // 0
             {0x20, 0x60, 0x20, 0x20, 0x70}, // 1
@@ -92,7 +92,11 @@ public:
         for (size_t j = 0; j < 5; j++) {
             const uint16_t address = (i * 5) + j;
             this->memory[address] = font[i][j];
+            // std::cout << std::hex;
+            // std::cout << static_cast<int>( memory[address]) << std::endl;
+
         }
+        // std::cout << std::endl;
     }
 
 
@@ -300,7 +304,7 @@ void Chip8::OP_dxyn(const uint8_t xreg_address, const uint8_t yreg_address, cons
             if (x + j >= VIDEO_WIDTH)
                 break;
             else {
-                const bool pixel = sprite_row & (1 << j);
+                const bool pixel = sprite_row & (0x80 >> j);
 
                 // if (this->video[y + i][x + j] == pixel)
                     // this->registers[0xF] = 1;
@@ -448,9 +452,11 @@ void Chip8::OP_fx0a(const uint8_t xreg_address) {
 int main() {
     Chip8 emulator;
 
+
     // emulator.display_memory();
     // emulator.display_registers();
-    emulator.OP_fx29(0);
+    emulator.OP_6xnn(1,0x1);
+    emulator.OP_fx29(1);
     emulator.OP_dxyn(0,0,5);
 
     emulator.display_video();
