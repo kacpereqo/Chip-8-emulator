@@ -35,18 +35,19 @@ public:
     uint8_t sound_timer{};
 
     Chip8() {
-        this->opcode = START_ADDRESS;
+        this->program_counter = START_ADDRESS;
         this->load_font();
     };
 
-    void loadRom(std::vector<uint8_t> rom) {
-        if (rom.size() < MEMORY_SIZE) {
-            throw std::invalid_argument("loaded rom is bigger than" + std::to_string(MEMORY_SIZE) + "B");
+    void load_rom(std::vector<uint8_t>& rom) {
+        if (rom.size() > MEMORY_SIZE) {
+            throw std::invalid_argument("loaded rom is bigger than " + std::to_string(MEMORY_SIZE) + "B");
         }
-        std::copy(rom.begin(), rom.end(), this->memory);
+        for (auto x: rom)
+        std::copy(rom.begin(), rom.end(), this->memory + START_ADDRESS);
     }
 
-    void loadOpcode() {
+    void load_opcode() {
         this->opcode = this->memory[this->program_counter];
         this->opcode <<= 8;
 
@@ -55,7 +56,7 @@ public:
         this->program_counter += 2;
     }
 
-    void executeOpcode() const {
+    void execute_opcode() const {
         uint8_t args[4];
         args[0] = this->opcode & 0x000F;
         args[1] = this->opcode & 0x00F0;
@@ -106,10 +107,17 @@ public:
         this->sound_timer--;
     }
 
-    void emualate() {
-        for (size_t i = 0; i < 10; i++) {
-            loadOpcode();
-            executeOpcode();
+    void emulate() {
+    while (true) {
+           load_opcode();
+
+            if (this->opcode == 0x0000)
+                return;
+
+            std::cout << std::hex;
+            std::cout << "[INFO]" << this->opcode << std::endl;
+
+            execute_opcode();
             update_timers();
         }
     }
@@ -452,13 +460,22 @@ void Chip8::OP_fx0a(const uint8_t xreg_address) {
 int main() {
     Chip8 emulator;
 
+    std::vector<uint8_t> rom{
+        0x61,0x11,
+        0xf1,0x29,
+        0xd0,0x05,
+    };
+
+    emulator.load_rom(rom);
+
+    emulator.emulate();
 
     // emulator.display_memory();
     // emulator.display_registers();
-    emulator.OP_6xnn(1,0x1);
-    emulator.OP_fx29(1);
-    emulator.OP_dxyn(0,0,5);
+    // emulator.OP_6xnn(1,0x1);
+    // emulator.OP_fx29(1);
+    // emulator.OP_dxyn(0,0,5);
 
-    emulator.display_video();
+    // emulator.display_video();
 }
 
