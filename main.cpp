@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <vector>
 #include <cstring>
+#include <fstream>
 
 constexpr uint16_t START_ADDRESS = 0x200;
 constexpr uint8_t STACK_SIZE = 16;
@@ -43,7 +44,6 @@ public:
         if (rom.size() > MEMORY_SIZE) {
             throw std::invalid_argument("loaded rom is bigger than " + std::to_string(MEMORY_SIZE) + "B");
         }
-        for (auto x: rom)
         std::copy(rom.begin(), rom.end(), this->memory + START_ADDRESS);
     }
 
@@ -51,21 +51,194 @@ public:
         this->opcode = this->memory[this->program_counter];
         this->opcode <<= 8;
 
-        this->opcode |= this->memory[this->program_counter + 1];
-
+        this->opcode |= this->memory[this->program_counter+1];
         this->program_counter += 2;
     }
 
-    void execute_opcode() const {
-        uint8_t args[4];
-        args[0] = this->opcode & 0x000F;
-        args[1] = this->opcode & 0x00F0;
-        args[2] = this->opcode & 0x0F00;
-        args[3] = this->opcode & 0xF000;
-
-        switch (args[0]) {
-
+    template <typename T,std::size_t Sz, typename... Args>
+    [[nodiscard]] T combine(const Args... args) const {
+        T result = 0;
+        for (const auto arg : {args...}) {
+            if (sizeof(arg) > Sz)
+                throw std::invalid_argument("Argument is bigger than " + std::to_string(Sz) + "B");
+            result <<= Sz;
+            result |= arg;
         }
+
+        return result;
+    }
+
+
+    void execute_opcode() {
+        uint8_t args[4];
+        args[3] = (this->opcode & 0x000F) >> 0;
+        args[2] = (this->opcode & 0x00F0) >> 4;
+        args[1] = (this->opcode & 0x0F00) >> 8;
+        args[0] = (this->opcode & 0xF000) >> 12;
+
+        // https://austinmorlan.com/posts/chip8_emulator/#the-instructions
+        switch (args[0]) {
+            case(0x1): {
+                this->OP_1nnn(this->combine<uint16_t,4>(args[1],args[2],args[3]));
+                return;
+            }
+            case(0x2): {
+                this->OP_2nnn(this->combine<uint16_t,4>(args[1],args[2],args[3]));
+                return;
+            }
+            case(0x3): {
+                this->OP_3xnn(args[1],this->combine<uint8_t,4>(args[2],args[3]));
+                return;
+            }
+            case(0x4): {
+                this->OP_4xnn(args[1], this->combine<uint8_t,4>(args[2],args[3]));
+                return;
+            }
+            case(0x5): {
+                this->OP_5xy0(args[1],args[2]);
+                return;
+            }
+            case(0x6): {
+                this->OP_6xnn(args[1],this->combine<uint8_t,4>(args[2],args[3]));
+                return;
+            }
+            case(0x7): {
+                this->OP_7xnn(args[1],this->combine<uint8_t,4>(args[2],args[3]));
+                return;
+            }
+            case(0x9): {
+                this->OP_9xy0(args[1],args[2]);
+                return;
+            }
+            case(0xa): {
+                this->OP_annn(this->combine<uint16_t,4>(args[1],args[2],args[3]));
+                return;
+            }
+            case(0xb): {
+                this->OP_bnnn(this->combine<uint16_t,4>(args[1],args[2],args[3]));
+                return;
+            }
+            case(0xc): {
+                this->OP_cxnn(args[1],this->combine<uint8_t,4>(args[2],args[3]));
+                return;
+            }
+            case(0xd): {
+                this->OP_dxyn(args[1],args[2],args[3]);
+                return;
+            }
+            case (0x8): {
+                switch (args[3]) {
+                    case (0x0): {
+                        this->OP_8xy0(args[1],args[2]);
+                        return;
+                    }
+                    case (0x1): {
+                        this->OP_8xy1(args[1],args[2]);
+                        return;
+                    }
+                    case (0x2): {
+                        this->OP_8xy2(args[1],args[2]);
+                        return;
+                    }
+                    case (0x3): {
+                        this->OP_8xy3(args[1],args[2]);
+                        return;
+                    }
+                    case (0x4): {
+                        this->OP_8xy4(args[1],args[2]);
+                        return;
+                    }
+                    case (0x5): {
+                        this->OP_8xy5(args[1],args[2]);
+                        return;
+                    }
+                    case (0x6): {
+                        this->OP_8xy6(args[1],args[2]);
+                        return;
+                    }
+
+                    case (0x7): {
+                        this->OP_8xy7(args[1],args[2]);
+                        return;
+                    }
+                    case (0xe): {
+                        this->OP_8xye(args[1],args[2]);
+                        return;
+                    }
+                }
+            }
+
+            case (0x0): {
+                switch(args[3]) {
+                    case(0x0): {
+                        this->OP_00e0();
+                        return;
+                    }
+
+                    case(0xe): {
+                        this->OP_00ee();
+                        return;
+                    }
+                }
+            }
+
+            case(0xe): {
+                switch (args[2] << 4 | args[3]) {
+                    case(0xa1): {
+                        this->OP_exa1(args[1]);
+                        return;
+                    }
+                    case(0x9e): {
+                        this->OP_ex9e(args[1]);
+                        return;
+                    }
+                }
+            }
+
+            case(0xf): {
+                switch (combine<uint8_t,4>(args[2],args[3])) {
+                    case(0x07): {
+                        this->OP_fx07(args[1]);
+                        break;
+                    }
+                    case(0x0a): {
+                        this->OP_fx0a(args[1]);
+                        break;
+                    }
+                    case(0x15): {
+                        this->OP_fx15(args[1]);
+                        return;
+                    }
+                    case(0x18): {
+                        // this->OP_fx18(args[1]);
+                        return;
+                    }
+                    case(0x1e): {
+                        this->OP_fx1e(args[1]);
+                        return;
+                    }
+                    case(0x29): {
+                        this->OP_fx29(args[1]);
+                        return;
+                    }
+                    case(0x33): {
+                        this->OP_fx33(args[1]);
+                        return;
+                    }
+                    case(0x55): {
+                        this->OP_fx55(args[1]);
+                        return;
+                    }
+
+                    case(0x65): {
+                        this->OP_fx65(args[1]);
+                        return;
+                    }
+                    default: ;
+                }
+            }
+        }
+                throw std::domain_error("Unknown opcode: " + std::to_string(this->opcode));
     }
 
     void load_font() {
@@ -114,10 +287,13 @@ public:
             if (this->opcode == 0x0000)
                 return;
 
-            std::cout << std::hex;
-            std::cout << "[INFO]" << this->opcode << std::endl;
-
             execute_opcode();
+
+#ifdef DEBUG
+            std::cout << std::hex;
+            std::cout << "PC: " << this->program_counter << std::endl;
+            std::cout << "OP: " << this->opcode << std::endl << std::endl;
+#endif
             update_timers();
         }
     }
@@ -150,7 +326,7 @@ public:
     }
 
 
-    void display_memory()  {
+    void display_memory() const {
         std::cout << std::setfill('0');
         std::cout << std::hex;
 
@@ -321,6 +497,7 @@ void Chip8::OP_dxyn(const uint8_t xreg_address, const uint8_t yreg_address, cons
             }
         }
     }
+    this->display_video();
 }
 
 void Chip8::OP_9xy0(const uint8_t xreg_address, const uint8_t yreg_address) {
@@ -456,26 +633,38 @@ void Chip8::OP_fx0a(const uint8_t xreg_address) {
     // TODO
 }
 
+void Chip8::OP_bnnn(uint16_t value) {
+    ;
+}
+
+
 
 int main() {
     Chip8 emulator;
 
-    std::vector<uint8_t> rom{
-        0x61,0x11,
-        0xf1,0x29,
-        0xd0,0x05,
-    };
+    // std::vector<uint8_t> rom{
+        // 0x61,0x11,
+        // 0xf1,0x29,
+        // 0xd0,0x05,
+    // };
+
+    std::vector<uint8_t> rom{};
+
+    std::ifstream file("../rom.ch8", std::ios::binary);
+    if (!file.is_open()) {
+        throw std::invalid_argument("Can't open file");
+    }
+
+    while (!file.eof()) {
+        uint8_t byte;
+        file.read(reinterpret_cast<char*>(&byte), sizeof(byte));
+        rom.push_back(byte);
+    }
+
+    for(auto i : rom)
+        std::cout << std::hex << static_cast<int>(i) << std::endl;
 
     emulator.load_rom(rom);
-
     emulator.emulate();
-
-    // emulator.display_memory();
-    // emulator.display_registers();
-    // emulator.OP_6xnn(1,0x1);
-    // emulator.OP_fx29(1);
-    // emulator.OP_dxyn(0,0,5);
-
-    // emulator.display_video();
 }
 
